@@ -62,13 +62,13 @@ func TestServerVersionMySQL(t *testing.T) {
 	t.Setenv("ARGV_FILE", argvFile)
 	writeFakeScript(t, filepath.Join(binDir, "mysql"), scriptWithArgvDump(
 		"mysql  Ver 11.8.6-MariaDB for Linux",
-		"if [ \"$MYSQL_PWD\" != \"root123\" ]; then echo 'missing MYSQL_PWD' >&2; exit 41; fi\n"+
+		"if [ \"$MYSQL_PWD\" != \"test-password\" ]; then echo 'missing MYSQL_PWD' >&2; exit 41; fi\n"+
 			"echo '9.7.1'\n",
 	))
 	source := newFakeSource(t, root, []string{binDir}, func(opts *Options) {
 		opts.LookupEnv = func(key string) (string, bool) {
 			if key == "MYSQL_PWD" {
-				return "root123", true
+				return "test-password", true
 			}
 			return "", false
 		}
@@ -88,7 +88,7 @@ func TestServerVersionMySQL(t *testing.T) {
 		t.Fatalf("mysql server_version=%q source=%q，期望 9.7.1/server", mysql.ServerVersion, mysql.VersionSource)
 	}
 	argv := readArgv(t, argvFile)
-	assertArgvOmits(t, argv, "root123")
+	assertArgvOmits(t, argv, "test-password")
 	assertArgvContains(t, argv,
 		"-h", "127.0.0.1", "-P", "3306", "--protocol=TCP", "--connect-timeout=3",
 		"-u", "root", "-e", "SELECT VERSION()", "-N", "-B")
