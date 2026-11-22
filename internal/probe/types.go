@@ -11,20 +11,36 @@ package probe
 
 import "fmt"
 
+// 版本来源取值：server 表示真实服务端探测成功；client 表示只拿到客户端/二进制版本；
+// unknown 表示两者都没有。禁止用客户端版本冒充服务端版本。
+const (
+	VersionSourceServer  = "server"
+	VersionSourceClient  = "client"
+	VersionSourceUnknown = "unknown"
+)
+
 // Service 是 discover.services 返回的单个服务条目。字段全部显式，不使用 any/object
-// （AGENTS.md 数据形状纪律）；not found 时 Found=false、Bin/Version/ConfigDir 为空、
-// InstallHint 必填。
+// （AGENTS.md 数据形状纪律）；not found 时 Found=false、Bin/ClientVersion/
+// ServerVersion/ConfigDir 为空、InstallHint 必填。
+//
+// 版本语义（2026-11-23 起）：
+//   - ClientVersion 是客户端/二进制自身的版本（`mysql --version` 等 `--version` 输出）；
+//   - ServerVersion 是连上真实服务端后查到的版本（`SELECT VERSION()` / `SHOW
+//     server_version` / Redis INFO），探不到就留空，绝不拿 ClientVersion 顶替；
+//   - VersionSource 明确告诉前端该信哪个：server / client / unknown。
 type Service struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Found       bool   `json:"found"`
-	Bin         string `json:"bin,omitempty"`
-	Version     string `json:"version,omitempty"`
-	ConfigDir   string `json:"config_dir,omitempty"`
-	Running     bool   `json:"running"`
-	Port        int    `json:"port"`
-	Source      string `json:"source,omitempty"`
-	InstallHint string `json:"install_hint,omitempty"`
+	ID            string `json:"id"`
+	Name          string `json:"name"`
+	Found         bool   `json:"found"`
+	Bin           string `json:"bin,omitempty"`
+	ClientVersion string `json:"client_version,omitempty"`
+	ServerVersion string `json:"server_version,omitempty"`
+	VersionSource string `json:"version_source"`
+	ConfigDir     string `json:"config_dir,omitempty"`
+	Running       bool   `json:"running"`
+	Port          int    `json:"port"`
+	Source        string `json:"source,omitempty"`
+	InstallHint   string `json:"install_hint,omitempty"`
 }
 
 // ListeningPort 是 discover.ports 返回的监听套接字条目。

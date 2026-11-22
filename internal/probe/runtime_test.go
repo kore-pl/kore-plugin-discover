@@ -66,8 +66,9 @@ func newFakeRuntime(src Source) *Runtime {
 // TestCallServicesShape 验证 discover.services 输出数组形状与字段。
 func TestCallServicesShape(t *testing.T) {
 	src := &fakeSource{services: []Service{
-		{ID: "nginx", Name: "Nginx", Found: true, Bin: "/usr/sbin/nginx", Version: "1.24.0", Running: true, Port: 80, Source: "which"},
-		{ID: "docker", Name: "Docker", Found: false, Port: 2375, InstallHint: "apt install docker.io"},
+		{ID: "nginx", Name: "Nginx", Found: true, Bin: "/usr/sbin/nginx", ClientVersion: "1.24.0", VersionSource: VersionSourceClient, Running: true, Port: 80, Source: "which"},
+		{ID: "mysql", Name: "MySQL", Found: true, Bin: "/usr/bin/mysql", ClientVersion: "11.8.6-MariaDB", ServerVersion: "9.7.1", VersionSource: VersionSourceServer, Running: true, Port: 3306, Source: "which"},
+		{ID: "docker", Name: "Docker", Found: false, Port: 2375, InstallHint: "apt install docker.io", VersionSource: VersionSourceUnknown},
 	}}
 	raw, perr := newFakeRuntime(src).Call("discover.services", nil)
 	if perr != nil {
@@ -77,11 +78,17 @@ func TestCallServicesShape(t *testing.T) {
 	if err := json.Unmarshal(raw, &services); err != nil {
 		t.Fatalf("结果不是数组: %v (%s)", err, raw)
 	}
-	if len(services) != 2 || services[0].ID != "nginx" || !services[0].Found {
+	if len(services) != 3 || services[0].ID != "nginx" || !services[0].Found {
 		t.Fatalf("服务清单不符: %+v", services)
 	}
-	if services[1].Found || services[1].InstallHint == "" {
-		t.Fatalf("未装项应带 install_hint: %+v", services[1])
+	if services[0].VersionSource != VersionSourceClient || services[0].ClientVersion != "1.24.0" {
+		t.Fatalf("客户端版本来源不符: %+v", services[0])
+	}
+	if services[1].VersionSource != VersionSourceServer || services[1].ServerVersion != "9.7.1" || services[1].ClientVersion != "11.8.6-MariaDB" {
+		t.Fatalf("服务端版本来源不符: %+v", services[1])
+	}
+	if services[2].Found || services[2].InstallHint == "" || services[2].VersionSource != VersionSourceUnknown {
+		t.Fatalf("未装项应带 install_hint 且 version_source=unknown: %+v", services[2])
 	}
 }
 

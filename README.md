@@ -19,8 +19,9 @@ kore 的本机服务发现插件（production）：**自动探测本机装了哪
 返回数组（顺序固定为探测目标表顺序），每项：
 
 ```json
-{"id":"nginx","name":"Nginx","found":true,"bin":"/usr/sbin/nginx","version":"1.24.0",
- "config_dir":"/etc/nginx","running":false,"port":80,"source":"which"}
+{"id":"mysql","name":"MySQL","found":true,"bin":"/usr/bin/mysql",
+ "client_version":"11.8.6-MariaDB","server_version":"9.7.1","version_source":"server",
+ "config_dir":"/etc/mysql","running":true,"port":3306,"source":"which"}
 ```
 
 - `found=false` 时必带 `install_hint`（含 Debian/Ubuntu 与 RHEL 的安装命令）。
@@ -28,8 +29,29 @@ kore 的本机服务发现插件（production）：**自动探测本机装了哪
 systemd unit 命中、仅通过运行中进程名识别（例如容器里的 nginx，宿主看不到二进制）。
 - `running` 由 **监听端口** + `/proc/<pid>/comm` 进程名 + 特定运行标记（docker.sock、
   `/run/systemd/system`、ufw 的 `ENABLED=yes`）共同判定，任一成立即为 true。
-- `version` 由固定 argv 查询（nginx/apache 用 `-v`，caddy 用 `version`，其余 `--version`），
-  命令失败/超时只丢版本，不影响 `found`。
+- `client_version` 由固定 argv 查询（nginx/apache 用 `-v`，caddy 用 `version`，其余
+  `--version`），是**客户端/二进制自身版本**；命令失败/超时只丢该字段，不影响 `found`。
+- `server_version` 是**连上真实服务端后查到的版本**，探不到就为空字符串。绝不用
+  `client_version` 冒充服务端版本（旧版把 `mysql --version` 的客户端版本当服务端展示，
+  会出现"两台库"的误读）。
+- `version_source ∈ server|client|unknown`：`server` = 服务端探测成功（信 `server_version`）；
+  `client` = 只有客户端/二进制版本（`server_version` 为空，前端应显示"未连上服务端"）；
+  `unknown` = 两端都没有。
+- 服务端探测（每个目标独立，失败即降级，不报错）：
+
+  | 目标 | 命令 | 凭据来源 |
+  | --- | --- | --- |
+  | MySQL / MariaDB | `mysql -h 127.0.0.1 -P 3306 --protocol=TCP --connect-timeout=3 -u root -e "SELECT VERSION()" -N -B` | `MYSQL_PWD`（未设置则按空密码尝试） |
+  | PostgreSQL | `psql -h 127.0.0.1 -p 5432 -U postgres -tAc "SHOW server_version"` + `PGCONNECT_TIMEOUT=3` | `PGPASSWORD` |
+  | Redis | `redis-cli -h 127.0.0.1 -p 6379 --no-auth-warning INFO server`（取 `redis_version`） | `REDISCLI_AUTH` |
+  | nginx | 宿主有二进制时 `nginx -v` 即服务端版本；只有容器进程时 `docker exec <容器> nginx -v` | — |
+
+  MySQL/MariaDB 共用 3306，服务端类型按 `SELECT VERSION()` 归属：版本串含 `MariaDB`
+  记到 `mariadb` 条目，不含记到 `mysql` 条目；另一个条目只保留 `client_version`
+  （避免把 MySQL 服务端显示成 MariaDB）。
+  凭据**只经环境变量**传给子进程，不进入 argv（`/proc/<pid>/cmdline` 对同机其他用户可见）。
+  宿主没有 `redis-cli` 而 Redis 跑在容器里时，回退 `docker exec -e REDISCLI_AUTH <容器>
+  redis-cli ...`（只传变量名，值由 Docker CLI 从进程环境读取）。
 - 结果缓存 30s；`{"refresh":true}` 跳过缓存强制重探。
 
 探测目标（每个都会出现在数组里）：
@@ -112,7 +134,9 @@ go test ./tests/fault      # kill / timeout / disk / cgroup 四类故障注入
 
 单测覆盖：
 
-- 假 bin 目录（`t.TempDir()` + 假 `nginx` 脚本）→ found + version + config_dir + source；
+- 假 bin 目录（`t.TempDir()` + 假 `nginx` 脚本）→ found + client_version + config_dir + source；
+- 服务端版本三支（假 `mysql` / `psql` / `redis-cli`）：成功 → `server_version` + `version_source=server`；
+  失败/超时 → `server_version=""` + `version_source=client`；并断言密码只走环境变量、不进 argv；
 - 未安装服务 → `found=false` + `install_hint`；
 - `/proc/net/tcp` fixture 十六进制换算（`0100007F:1F90` → `127.0.0.1:8080`）；
 - tcp6（`::` / `::1` / IPv4-mapped）解析；

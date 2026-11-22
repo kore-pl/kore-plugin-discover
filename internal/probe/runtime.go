@@ -25,7 +25,9 @@ const (
 )
 
 // Runner 执行一次固定 argv 的子命令并返回合并输出；测试可注入假实现。
-type Runner func(ctx context.Context, bin string, args ...string) (string, error)
+// env 是追加到子进程的环境变量（KEY=VALUE），用于把凭据从环境变量传给客户端
+// （如 MYSQL_PWD / PGPASSWORD / REDISCLI_AUTH）——凭据禁止进入 argv。
+type Runner func(ctx context.Context, bin string, env []string, args ...string) (string, error)
 
 // Options 是 Runtime 的运行期配置：真实运行取默认值，测试可注入根目录/PATH/执行面。
 type Options struct {
@@ -37,6 +39,8 @@ type Options struct {
 	PathDirs []string
 	// Runner 是命令执行面；nil 时使用带超时的 exec 实现。
 	Runner Runner
+	// LookupEnv 读取环境变量（凭据只从环境变量取）；nil 时使用 os.LookupEnv。
+	LookupEnv func(string) (string, bool)
 	// Now 为空时取 time.Now；测试可注入假时钟验证缓存过期。
 	Now func() time.Time
 	// TTL 是结果缓存窗口，默认 30s。
@@ -72,6 +76,9 @@ func (o Options) normalize() Options {
 	}
 	if o.Runner == nil {
 		o.Runner = newExecRunner(o.CommandTimeout)
+	}
+	if o.LookupEnv == nil {
+		o.LookupEnv = os.LookupEnv
 	}
 	return o
 }
@@ -243,11 +250,15 @@ func parseParams(raw json.RawMessage) (bool, *pluginapi.Error) {
 }
 
 // newExecRunner 构造带 3s 命令超时的真实执行器：固定 argv，不经过 shell。
+// env 非空时追加到继承的环境变量之后（同名变量后者生效），凭据因此只存在于进程环境。
 func newExecRunner(timeout time.Duration) Runner {
-	return func(ctx context.Context, bin string, args ...string) (string, error) {
+	return func(ctx context.Context, bin string, env []string, args ...string) (string, error) {
 		commandCtx, cancel := context.WithTimeout(ctx, timeout)
 		defer cancel()
 		command := exec.CommandContext(commandCtx, bin, args...)
+		if len(env) > 0 {
+			command.Env = append(os.Environ(), env...)
+		}
 		command.WaitDelay = time.Second
 		output, err := command.CombinedOutput()
 		if err != nil && commandCtx.Err() == context.DeadlineExceeded {

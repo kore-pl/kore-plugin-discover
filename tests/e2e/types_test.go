@@ -9,16 +9,18 @@ import (
 
 // serviceItem 是 discover.services 的条目子集。
 type serviceItem struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Found       bool   `json:"found"`
-	Bin         string `json:"bin"`
-	Version     string `json:"version"`
-	ConfigDir   string `json:"config_dir"`
-	Running     bool   `json:"running"`
-	Port        int    `json:"port"`
-	Source      string `json:"source"`
-	InstallHint string `json:"install_hint"`
+	ID            string `json:"id"`
+	Name          string `json:"name"`
+	Found         bool   `json:"found"`
+	Bin           string `json:"bin"`
+	ClientVersion string `json:"client_version"`
+	ServerVersion string `json:"server_version"`
+	VersionSource string `json:"version_source"`
+	ConfigDir     string `json:"config_dir"`
+	Running       bool   `json:"running"`
+	Port          int    `json:"port"`
+	Source        string `json:"source"`
+	InstallHint   string `json:"install_hint"`
 }
 
 // portItem 是 discover.ports 的条目子集。

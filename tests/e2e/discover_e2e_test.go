@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -76,6 +77,41 @@ func TestDiscoverE2E(t *testing.T) {
 		}
 		t.Logf("E2E_SERVICE_%s %s", strings.ToUpper(id), raw)
 	}
+
+	// 1b) 版本语义：server_version 只能来自真实服务端探测；只拿到客户端版本时
+	// version_source 必须降级为 client，二者不得混淆。
+	for _, service := range services {
+		switch service.VersionSource {
+		case "server":
+			if service.ServerVersion == "" {
+				t.Fatalf("%s version_source=server 但 server_version 为空", service.ID)
+			}
+		case "client":
+			if service.ServerVersion != "" {
+				t.Fatalf("%s version_source=client 却带 server_version=%q", service.ID, service.ServerVersion)
+			}
+			if service.ClientVersion == "" {
+				t.Fatalf("%s version_source=client 但 client_version 为空", service.ID)
+			}
+		case "unknown":
+			if service.ClientVersion != "" || service.ServerVersion != "" {
+				t.Fatalf("%s version_source=unknown 却带版本: %+v", service.ID, service)
+			}
+		default:
+			t.Fatalf("%s version_source 非法: %q", service.ID, service.VersionSource)
+		}
+	}
+	for _, id := range []string{"mysql", "mariadb", "postgres", "redis", "nginx"} {
+		service, _ := findService(services, id)
+		raw, err := json.Marshal(service)
+		if err != nil {
+			t.Fatalf("序列化 %s 版本证据失败: %v", id, err)
+		}
+		t.Logf("E2E_VERSION_%s %s", strings.ToUpper(id), raw)
+	}
+	// 真机 E2E：提供了凭据就必须探到真实服务端版本；探测失败是失败，不是静默降级。
+	assertExpectedServerVersion(t, services, "mysql", "MYSQL_PWD", "E2E_EXPECT_MYSQL_SERVER_VERSION")
+	assertExpectedServerVersion(t, services, "redis", "REDISCLI_AUTH", "E2E_EXPECT_REDIS_SERVER_VERSION")
 
 	// 2) 真实监听端口：字段完整，并与 ss -ltn 对得上。
 	ports := parsePorts(t, mustCall(t, conn, "e2e-ports", "discover.ports", map[string]any{}))
@@ -186,4 +222,29 @@ func portsText(ports map[int]bool) string {
 		parts = append(parts, strconv.Itoa(port))
 	}
 	return fmt.Sprintf("[%s]", strings.Join(parts, ","))
+}
+
+// assertExpectedServerVersion 校验"有凭据 → 必须拿到真实服务端版本"。
+// 只有同时提供 credEnv 或 expectEnv 时才启用，避免无数据库的 CI 误报。
+func assertExpectedServerVersion(t *testing.T, services []serviceItem, id, credEnv, expectEnv string) {
+	t.Helper()
+	want := os.Getenv(expectEnv)
+	_, hasCred := os.LookupEnv(credEnv)
+	if want == "" && !hasCred {
+		t.Logf("E2E_VERSION_%s_SKIP 未提供 %s / %s", strings.ToUpper(id), credEnv, expectEnv)
+		return
+	}
+	service, ok := findService(services, id)
+	if !ok {
+		t.Fatalf("服务清单缺少 %s", id)
+	}
+	if !service.Found {
+		t.Fatalf("%s 未 found，但已提供 %s，无法验证服务端版本", id, credEnv)
+	}
+	if service.ServerVersion == "" || service.VersionSource != "server" {
+		t.Fatalf("%s 提供了 %s 仍未探到服务端版本: %+v", id, credEnv, service)
+	}
+	if want != "" && service.ServerVersion != want {
+		t.Fatalf("%s server_version=%q，期望 %q", id, service.ServerVersion, want)
+	}
 }

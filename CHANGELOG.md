@@ -5,6 +5,35 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-11-23
+
+### Added
+
+- `discover.services` 新增 `server_version`（真实服务端版本，探测不到为空）与
+  `version_source`（`server|client|unknown`）：MySQL/MariaDB 走 `SELECT VERSION()`、
+  PostgreSQL 走 `SHOW server_version`、Redis 走 `INFO server` 的 `redis_version`、
+  nginx 走 `-v`（容器内 `docker exec nginx -v`）。
+- 服务端探测按目标逐个实现，失败/超时/无凭据一律留空并降级 `version_source=client`，
+  不让整张服务清单报错。
+- 宿主没有 `redis-cli`、Redis 只在容器里时回退 `docker exec`；nginx 仅容器进程时同样
+  走 `docker exec`。
+- MySQL/MariaDB 共用的 3306 按 `SELECT VERSION()` 的服务端类型归属，避免把 MySQL
+  服务端挂到 mariadb 条目下（反之亦然）。
+- 单元测试覆盖 mysql / psql / redis-cli 三支的成功、失败、超时，并断言
+  `MYSQL_PWD` / `PGPASSWORD` / `REDISCLI_AUTH` 只经环境变量传递、不进入 argv；
+  E2E 增加版本语义断言与真机期望值校验。
+
+### Changed
+
+- **字段破坏性变更**：`discover.services` 的 `version` 更名为 `client_version`。
+  消费方（数据库/Redis 页自动检测横幅）应改用 `server_version` 展示服务端版本；
+  只有客户端版本时提示"未连上服务端，需要密码"。
+
+### Fixed
+
+- 自动检测横幅曾把 `mysql --version` 的客户端版本（如 MariaDB 11.8.6）当服务端版本，
+  与实例卡片的真实服务端版本（如 MySQL 9.7.1）并存，造成"本机有两套库"的误读。
+
 ## [0.1.0] - 2026-11-23
 
 ### Added

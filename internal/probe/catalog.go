@@ -16,6 +16,11 @@ type serviceSpec struct {
 	ConfigDirs []string
 	// VersionArgs 是固定版本参数；为空时取 --version。
 	VersionArgs []string
+	// ServerProbe 是服务端版本探测方式：mysql / postgres / redis / nginx；
+	// 空表示该目标没有独立服务端（只报客户端版本）。
+	ServerProbe string
+	// ClientBins 是服务端探测优先使用的客户端命令名；为空时回退到 Bins。
+	ClientBins []string
 	// Port 是服务端默认端口；0 表示不按端口判定。
 	Port int
 	// ProcessNames 是 /proc/<pid>/comm 里代表该服务在运行的进程名（小写）。
@@ -49,6 +54,8 @@ var catalog = []serviceSpec{
 		Units:        []string{"nginx.service"},
 		ConfigDirs:   []string{"/etc/nginx", "/usr/local/nginx/conf", "/usr/local/etc/nginx"},
 		VersionArgs:  []string{"-v"},
+		ServerProbe:  "nginx",
+		ClientBins:   []string{"nginx"},
 		Port:         80,
 		ProcessNames: []string{"nginx"},
 		InstallHint:  "Debian/Ubuntu: apt install nginx；RHEL: dnf install nginx",
@@ -92,6 +99,8 @@ var catalog = []serviceSpec{
 		KnownPaths:   []string{"/usr/bin/mysql", "/usr/sbin/mysqld", "/usr/local/mysql/bin/mysql"},
 		Units:        []string{"mysql.service", "mysqld.service"},
 		ConfigDirs:   []string{"/etc/mysql", "/etc/my.cnf.d"},
+		ServerProbe:  "mysql",
+		ClientBins:   []string{"mysql"},
 		Port:         3306,
 		ProcessNames: []string{"mysqld"},
 		InstallHint:  "Debian/Ubuntu: apt install mysql-client；RHEL: dnf install mysql",
@@ -102,6 +111,8 @@ var catalog = []serviceSpec{
 		KnownPaths:   []string{"/usr/bin/mariadb", "/usr/sbin/mariadbd"},
 		Units:        []string{"mariadb.service"},
 		ConfigDirs:   []string{"/etc/mysql/mariadb.conf.d", "/etc/mysql"},
+		ServerProbe:  "mysql",
+		ClientBins:   []string{"mariadb", "mysql"},
 		Port:         3306,
 		ProcessNames: []string{"mariadbd"},
 		InstallHint:  "Debian/Ubuntu: apt install mariadb-client；RHEL: dnf install mariadb",
@@ -115,6 +126,8 @@ var catalog = []serviceSpec{
 		},
 		Units:        []string{"postgresql.service", "postgres.service"},
 		ConfigDirs:   []string{"/etc/postgresql", "/var/lib/pgsql/data"},
+		ServerProbe:  "postgres",
+		ClientBins:   []string{"psql"},
 		Port:         5432,
 		ProcessNames: []string{"postgres"},
 		InstallHint:  "Debian/Ubuntu: apt install postgresql-client；RHEL: dnf install postgresql",
@@ -125,6 +138,8 @@ var catalog = []serviceSpec{
 		KnownPaths:   []string{"/usr/bin/redis-server", "/usr/local/bin/redis-server"},
 		Units:        []string{"redis-server.service", "redis.service"},
 		ConfigDirs:   []string{"/etc/redis", "/usr/local/etc/redis"},
+		ServerProbe:  "redis",
+		ClientBins:   []string{"redis-cli"},
 		Port:         6379,
 		ProcessNames: []string{"redis-server"},
 		InstallHint:  "Debian/Ubuntu: apt install redis-server；RHEL: dnf install redis",

@@ -61,8 +61,12 @@ func TestServicesFakeNginx(t *testing.T) {
 	if !nginx.Found || nginx.Bin != filepath.Join(binDir, "nginx") {
 		t.Fatalf("nginx 探测结果不符: %+v", nginx)
 	}
-	if nginx.Version != "1.24.0" {
-		t.Fatalf("nginx 版本=%q，期望 1.24.0", nginx.Version)
+	if nginx.ClientVersion != "1.24.0" {
+		t.Fatalf("nginx client_version=%q，期望 1.24.0", nginx.ClientVersion)
+	}
+	// nginx 没有独立客户端：本机二进制即服务端，`-v` 输出可直接作为服务端版本。
+	if nginx.ServerVersion != "1.24.0" || nginx.VersionSource != VersionSourceServer {
+		t.Fatalf("nginx 服务端版本=%q source=%q，期望 1.24.0/server", nginx.ServerVersion, nginx.VersionSource)
 	}
 	if nginx.Source != "which" {
 		t.Fatalf("nginx source=%q，期望 which", nginx.Source)
@@ -98,6 +102,9 @@ func TestServicesNotFoundHint(t *testing.T) {
 		if service.InstallHint == "" {
 			t.Fatalf("%s 未提供 install_hint", id)
 		}
+		if service.VersionSource != VersionSourceUnknown {
+			t.Fatalf("%s 未安装时 version_source 应为 unknown，实际 %q", id, service.VersionSource)
+		}
 	}
 	caddy, _ := findService(services, "caddy")
 	if !strings.Contains(caddy.InstallHint, "apt install caddy") {
@@ -127,8 +134,11 @@ func TestServicesCommandTimeout(t *testing.T) {
 	if !nginx.Found {
 		t.Fatalf("命令超时不应影响 found: %+v", nginx)
 	}
-	if nginx.Version != "" {
-		t.Fatalf("命令被超时截断时不应有版本: %q", nginx.Version)
+	if nginx.ClientVersion != "" || nginx.ServerVersion != "" {
+		t.Fatalf("命令被超时截断时不应有版本: client=%q server=%q", nginx.ClientVersion, nginx.ServerVersion)
+	}
+	if nginx.VersionSource != VersionSourceUnknown {
+		t.Fatalf("两端都探不到时 version_source 应为 unknown，实际 %q", nginx.VersionSource)
 	}
 }
 
@@ -174,5 +184,8 @@ func TestServicesProcessOnly(t *testing.T) {
 	nginx, _ := findService(services, "nginx")
 	if !nginx.Found || !nginx.Running || nginx.Source != "process" || nginx.Bin != "" {
 		t.Fatalf("进程-only 探测结果不符: %+v", nginx)
+	}
+	if nginx.ServerVersion != "" || nginx.VersionSource != VersionSourceUnknown {
+		t.Fatalf("进程-only 且无 docker 时不应编造服务端版本: %+v", nginx)
 	}
 }

@@ -63,6 +63,8 @@ func (s *hostSource) detect(ctx context.Context, spec serviceSpec, listening map
 	}
 	service.Found = bin != "" || commFound || source == "systemd"
 	if !service.Found {
+		// 未安装/未运行：没有任何版本来源，显式标 unknown（字段始终出现）。
+		service.VersionSource = VersionSourceUnknown
 		service.InstallHint = spec.InstallHint
 		return service, nil
 	}
@@ -71,7 +73,7 @@ func (s *hostSource) detect(ctx context.Context, spec serviceSpec, listening map
 	service.Source = source
 	service.ConfigDir = findConfigDir(s.fs, spec)
 	if bin != "" {
-		output, err := s.opts.Runner(ctx, bin, spec.versionArgs()...)
+		output, err := s.opts.Runner(ctx, bin, nil, spec.versionArgs()...)
 		if err != nil {
 			var fault *FaultError
 			if errors.As(err, &fault) {
@@ -80,10 +82,36 @@ func (s *hostSource) detect(ctx context.Context, spec serviceSpec, listening map
 			if ctx.Err() != nil {
 				return Service{}, ctx.Err()
 			}
-			// 命令不存在/超时/非零退出：版本留空，不影响 found 结论。
+			// 命令不存在/超时/非零退出：客户端版本留空，不影响 found 结论。
 		} else {
-			service.Version = parseVersion(output)
+			service.ClientVersion = parseVersion(output)
 		}
+	}
+
+	// 服务端版本单独探测：只对 catalog 声明了 ServerProbe 的目标执行；探测失败、
+	// 无凭据、服务端不可达一律留空，由 VersionSource=client 明确降级——绝不像旧版
+	// 那样把客户端 `--version` 输出当成服务端版本展示。
+	if spec.ServerProbe != "" {
+		serverVersion, probeErr := s.probeServerVersion(ctx, spec, service)
+		if probeErr != nil {
+			var fault *FaultError
+			if errors.As(probeErr, &fault) {
+				return Service{}, probeErr
+			}
+			if ctx.Err() != nil {
+				return Service{}, ctx.Err()
+			}
+		} else {
+			service.ServerVersion = serverVersion
+		}
+	}
+	switch {
+	case service.ServerVersion != "":
+		service.VersionSource = VersionSourceServer
+	case service.ClientVersion != "":
+		service.VersionSource = VersionSourceClient
+	default:
+		service.VersionSource = VersionSourceUnknown
 	}
 
 	service.Running = commFound
