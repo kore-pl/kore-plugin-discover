@@ -128,12 +128,17 @@ func NewRuntime(opts Options, src Source) *Runtime {
 
 // Call 执行一个 discover 方法（方法名已是 discover.<verb> 规范形式）。
 func (r *Runtime) Call(method string, params json.RawMessage) (json.RawMessage, *pluginapi.Error) {
-	if r.opts.GOOS != "linux" {
-		return nil, unsupported("discover 插件只在 Linux 提供真实实现（当前 " + r.opts.GOOS + "）")
-	}
 	refresh, perr := parseParams(params)
 	if perr != nil {
 		return nil, perr
+	}
+	// discover.config.get 是「凭据声明 + 环境变量注入状态」的只读视图：平台无关、
+	// 不执行任何命令、不读 30s 缓存（凭据可能在插件进程启动后才注入，读时取最新）。
+	if method == "discover.config.get" {
+		return encode(buildConfigGet(r.opts.LookupEnv))
+	}
+	if r.opts.GOOS != "linux" {
+		return nil, unsupported("discover 插件只在 Linux 提供真实实现（当前 " + r.opts.GOOS + "）")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), r.opts.OverallTimeout)
 	defer cancel()

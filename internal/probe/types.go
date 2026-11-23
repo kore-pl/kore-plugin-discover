@@ -36,11 +36,14 @@ type Service struct {
 	ClientVersion string `json:"client_version,omitempty"`
 	ServerVersion string `json:"server_version,omitempty"`
 	VersionSource string `json:"version_source"`
-	ConfigDir     string `json:"config_dir,omitempty"`
-	Running       bool   `json:"running"`
-	Port          int    `json:"port"`
-	Source        string `json:"source,omitempty"`
-	InstallHint   string `json:"install_hint,omitempty"`
+	// VersionHint 是「服务端版本没拿到」时的可操作提示（缺哪个环境变量 / 去哪填 /
+	// 服务端为何不可达）；探到服务端版本、或该服务不需要服务端探测时为空。
+	VersionHint string `json:"version_hint,omitempty"`
+	ConfigDir   string `json:"config_dir,omitempty"`
+	Running     bool   `json:"running"`
+	Port        int    `json:"port"`
+	Source      string `json:"source,omitempty"`
+	InstallHint string `json:"install_hint,omitempty"`
 }
 
 // ListeningPort 是 discover.ports 返回的监听套接字条目。

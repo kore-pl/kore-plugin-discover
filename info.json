@@ -1,17 +1,32 @@
 {
   "id": "discover",
   "name": "本机服务发现插件",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "protocol": "kore.plugin.v1",
   "lifecycle": "lazy",
   "depth_level": "production",
   "entry": "bin/discover",
-  "capabilities": ["system:read", "proc:read"],
+  "capabilities": [
+    "system:read",
+    "proc:read"
+  ],
   "triggers": [],
   "requires_kore": ">=0.1.0 <0.2.0",
-  "resources": {"memory_mb": 6, "cpu_quota": "10%", "pids_max": 16},
+  "resources": {
+    "memory_mb": 6,
+    "cpu_quota": "10%",
+    "pids_max": 16
+  },
   "depends_on": [],
   "conflicts": [],
-  "scenario_tags": ["ops"],
-  "size_bytes": 1498640
+  "scenario_tags": [
+    "ops"
+  ],
+  "size_bytes": 1532091,
+  "method_capabilities": {
+    "discover.services": "system:read",
+    "discover.ports": "system:read",
+    "discover.summary": "system:read",
+    "discover.config.get": "system:read"
+  }
 }

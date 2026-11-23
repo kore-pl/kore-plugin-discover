@@ -113,6 +113,9 @@ func (s *hostSource) detect(ctx context.Context, spec serviceSpec, listening map
 	default:
 		service.VersionSource = VersionSourceUnknown
 	}
+	// 没拿到服务端版本时给可操作提示（缺哪个凭据环境变量 / 去哪填 / 服务端为何不可达）。
+	// 只对已找到的服务生成；未安装项由 install_hint 覆盖。
+	service.VersionHint = s.versionHint(spec, service)
 
 	service.Running = commFound
 	if spec.Port > 0 && listening[spec.Port] {

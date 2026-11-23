@@ -36,9 +36,89 @@ func (s *hostSource) probeServerVersion(ctx context.Context, spec serviceSpec, s
 		return s.redisServerVersion(ctx, spec)
 	case "nginx":
 		return s.nginxServerVersion(ctx, service)
+	case "memcached":
+		return s.memcachedServerVersion(ctx, spec)
+	case "elasticsearch":
+		return s.elasticsearchServerVersion(ctx, spec)
+	case "mongodb":
+		return s.mongodbServerVersion(ctx, spec)
+	case "rabbitmq":
+		return s.rabbitmqServerVersion(ctx, spec)
 	default:
 		return "", nil
 	}
+}
+
+// mongodbServerVersion 用 mongosh（新版）或 mongo（旧版）执行 db.version()。
+// 客户端命令固定 argv；找不到客户端、连接失败、需要认证都返回空串（降级 client/unknown）。
+func (s *hostSource) mongodbServerVersion(ctx context.Context, spec serviceSpec) (string, error) {
+	for _, name := range []string{"mongosh", "mongo"} {
+		bin := s.findClientNamed(spec, name)
+		if bin == "" {
+			continue
+		}
+		output, err := s.opts.Runner(ctx, bin, nil,
+			"--quiet",
+			"--host", probeHost,
+			"--port", strconv.Itoa(spec.Port),
+			"--eval", "db.version()",
+		)
+		if err != nil {
+			var fault *FaultError
+			if errors.As(err, &fault) {
+				return "", err
+			}
+			if ctx.Err() != nil {
+				return "", ctx.Err()
+			}
+			continue
+		}
+		if version := parseStandaloneVersion(output); version != "" {
+			return version, nil
+		}
+	}
+	return "", nil
+}
+
+// rabbitmqServerVersion 依次尝试 rabbitmqctl version 与 rabbitmq-diagnostics -q server_version。
+// 两者都需要能读 erlang cookie（通常只有 rabbitmq 用户可读），失败即降级，不报错。
+func (s *hostSource) rabbitmqServerVersion(ctx context.Context, spec serviceSpec) (string, error) {
+	candidates := []struct {
+		name string
+		args []string
+	}{
+		{"rabbitmqctl", []string{"version"}},
+		{"rabbitmq-diagnostics", []string{"-q", "server_version"}},
+	}
+	for _, candidate := range candidates {
+		bin := s.findClientNamed(spec, candidate.name)
+		if bin == "" {
+			continue
+		}
+		output, err := s.opts.Runner(ctx, bin, nil, candidate.args...)
+		if err != nil {
+			var fault *FaultError
+			if errors.As(err, &fault) {
+				return "", err
+			}
+			if ctx.Err() != nil {
+				return "", ctx.Err()
+			}
+			continue
+		}
+		if version := parseStandaloneVersion(output); version != "" {
+			return version, nil
+		}
+	}
+	return "", nil
+}
+
+// findClientNamed 在 PATH 与 catalog 常见路径里定位指定名称的客户端命令。
+func (s *hostSource) findClientNamed(spec serviceSpec, name string) string {
+	return s.findClientExecutable(serviceSpec{
+		Bins:       []string{name},
+		KnownPaths: spec.KnownPaths,
+	})
 }
 
 // mysqlServerVersion 用 mysql/mariadb 客户端执行 SELECT VERSION()。

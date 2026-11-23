@@ -16,6 +16,7 @@ type serviceItem struct {
 	ClientVersion string `json:"client_version"`
 	ServerVersion string `json:"server_version"`
 	VersionSource string `json:"version_source"`
+	VersionHint   string `json:"version_hint"`
 	ConfigDir     string `json:"config_dir"`
 	Running       bool   `json:"running"`
 	Port          int    `json:"port"`
@@ -85,4 +86,34 @@ func findService(services []serviceItem, id string) (serviceItem, bool) {
 		}
 	}
 	return serviceItem{}, false
+}
+
+// credentialRequirementItem 是 discover.config.get 的单条凭据声明子集。
+type credentialRequirementItem struct {
+	ID       string   `json:"id"`
+	EnvVar   string   `json:"env_var"`
+	Services []string `json:"services"`
+	Purpose  string   `json:"purpose"`
+	Required bool     `json:"required"`
+	Status   string   `json:"status"`
+	FillHint string   `json:"fill_hint"`
+}
+
+// configGetItem 是 discover.config.get 的结果子集。
+type configGetItem struct {
+	Plugin                 string                      `json:"plugin"`
+	Persisted              bool                        `json:"persisted"`
+	CredentialRequirements []credentialRequirementItem `json:"credential_requirements"`
+	Transport              string                      `json:"transport"`
+	Hint                   string                      `json:"hint"`
+}
+
+// parseConfigGet 解析凭据声明结果。
+func parseConfigGet(t *testing.T, raw string) configGetItem {
+	t.Helper()
+	var result configGetItem
+	if err := json.Unmarshal([]byte(raw), &result); err != nil {
+		t.Fatalf("解析 discover.config.get 失败: %v (%s)", err, raw)
+	}
+	return result
 }

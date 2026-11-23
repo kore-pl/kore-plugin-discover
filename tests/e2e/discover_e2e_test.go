@@ -23,6 +23,8 @@ var requiredServices = []string{
 	"php", "node", "python3",
 	"docker", "podman",
 	"crontab", "systemctl", "ufw", "iptables", "firewall-cmd",
+	// 0.3.0 新增指纹（端口 + 协议握手/版本串）：memcached / mongodb / rabbitmq / elasticsearch。
+	"memcached", "mongodb", "rabbitmq", "elasticsearch",
 }
 
 // TestDiscoverE2E 真实插件进程全链路：services → ports（与 ss -ltn 对照）→ summary → shutdown。
@@ -112,6 +114,25 @@ func TestDiscoverE2E(t *testing.T) {
 	// 真机 E2E：提供了凭据就必须探到真实服务端版本；探测失败是失败，不是静默降级。
 	assertExpectedServerVersion(t, services, "mysql", "MYSQL_PWD", "E2E_EXPECT_MYSQL_SERVER_VERSION")
 	assertExpectedServerVersion(t, services, "redis", "REDISCLI_AUTH", "E2E_EXPECT_REDIS_SERVER_VERSION")
+
+	// 1c) 凭据声明（§3.5 #8 前置能力）：config.get 只暴露声明与注入状态，绝不回传凭据值。
+	configRaw := mustCall(t, conn, "e2e-config", "discover.config.get", map[string]any{})
+	config := parseConfigGet(t, configRaw)
+	if len(config.CredentialRequirements) != 3 {
+		t.Fatalf("凭据声明应有 3 条，实际 %d", len(config.CredentialRequirements))
+	}
+	for _, requirement := range config.CredentialRequirements {
+		if requirement.EnvVar == "" || requirement.Purpose == "" || requirement.FillHint == "" {
+			t.Fatalf("凭据声明字段不完整: %+v", requirement)
+		}
+		if requirement.Status != "configured" && requirement.Status != "missing" {
+			t.Fatalf("凭据状态非法: %+v", requirement)
+		}
+		if secret := os.Getenv(requirement.EnvVar); secret != "" && strings.Contains(configRaw, secret) {
+			t.Fatalf("config.get 泄漏了 %s 的凭据值", requirement.EnvVar)
+		}
+	}
+	t.Logf("E2E_CONFIG %s", configRaw)
 
 	// 2) 真实监听端口：字段完整，并与 ss -ltn 对得上。
 	ports := parsePorts(t, mustCall(t, conn, "e2e-ports", "discover.ports", map[string]any{}))

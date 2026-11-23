@@ -5,6 +5,43 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-11-23
+
+### 新增
+
+- **方法级能力（§3.5 #12）**：`info.json` 新增 `method_capabilities`，4 条全部 `system:read`
+  （`discover.services` / `discover.ports` / `discover.summary` / `discover.config.get`）。
+  本插件全只读，因此没有 `system:admin` 映射；`declaration_test.go` 双向锁定「声明集合 == 实现集合」、
+  键语法/插件域/6 项能力白名单，并断言 `config.set` 既未声明也不被方法分发接受。
+- **`discover.config.get`**：服务端探测凭据的只读声明 + 注入状态视图——列出
+  `MYSQL_PWD` / `PGPASSWORD` / `REDISCLI_AUTH` 三条凭据（适用服务、用途、`configured|missing`、
+  `fill_hint`、`transport`），**绝不回传凭据值**，也不提供 `config.set`（不接受明文凭据）。
+  这是 §3.5 #8「插件凭据无法跨插件传递」的 discover 侧前置能力：内核凭据注入落地后
+  只需注入同名环境变量，本插件无需改动。
+- **`services` 条目新增 `version_hint`**：found=true 但服务端版本没拿到时给可操作提示——
+  缺哪个凭据变量、去哪填（db-mysql / db-postgres / redis 配置面板）、或服务端为何不可达；
+  凭据缺失明确标注为「可选」（缺失只降级版本来源，不影响插件可用性）。
+- **四类新服务指纹**（端口 + 协议握手/版本串，不引入第三方依赖）：
+  - `memcached`：原始 TCP 文本协议 `version` → `VERSION <x.y.z>`（真实服务端版本）；
+  - `elasticsearch`：原始 TCP 最小 HTTP/1.0 `GET /` → JSON `version.number`（真实服务端版本）；
+  - `mongodb`：`mongosh`/`mongo` 固定 argv `--eval "db.version()"`；
+  - `rabbitmq`：`rabbitmqctl version`，回退 `rabbitmq-diagnostics -q server_version`。
+  四者均只在 127.0.0.1 上探测，失败/需认证一律降级为 client/unknown，不让整表报错。
+
+### 变更
+
+- 探测目标从 18 项扩到 22 项（新增 memcached / mongodb / rabbitmq / elasticsearch）；
+  原有服务的探测逻辑、`/proc/net` 端口反查、30s 读时缓存与 `version_source` 三态语义不变。
+- 凭据仍只从进程环境变量读取（值不进 argv、不回传、不落盘）；临时验证方式仍是启动 kored 前 export，
+  产品路径等内核凭据注入（§3.5 #8）。
+- 版本 0.3.0；README 补方法级能力、凭据声明、新指纹与「安装动作判定不做」的裁决。
+
+### 未做（判定）
+
+- **安装动作不做**：装包是写操作且需要 root，属部署编排（app-deploy / 包管理器插件）；
+  discover 只读发现 + `install_hint` 指向，避免把只读插件变成提权安装器。
+  若将来要做，必须先有 ADR-0018 的 root 通道与审计、失败回滚设计（见 README「安装动作」节）。
+
 ## [0.2.0] - 2026-11-23
 
 ### Added

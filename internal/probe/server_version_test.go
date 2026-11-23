@@ -292,3 +292,63 @@ func TestServerVersionMySQLFlavor(t *testing.T) {
 		t.Fatalf("MariaDB 条目应认领 MariaDB 服务端: %+v", mariadb)
 	}
 }
+
+// TestServerVersionMongoDB 覆盖 mongosh 分支：db.version() 输出即真实服务端版本；
+// 命令固定 argv（宿主/端口/脚本），不接受用户输入。
+func TestServerVersionMongoDB(t *testing.T) {
+	root := t.TempDir()
+	binDir := filepath.Join(root, "fakebin")
+	argvFile := filepath.Join(root, "mongosh-argv.txt")
+	t.Setenv("ARGV_FILE", argvFile)
+	writeFakeScript(t, filepath.Join(binDir, "mongosh"), "#!/bin/sh\n"+
+		"if [ \"$1\" = \"--version\" ]; then echo '2.2.0'; exit 0; fi\n"+
+		": > \"$ARGV_FILE\"; for a in \"$@\"; do printf '%s\\n' \"$a\" >> \"$ARGV_FILE\"; done\n"+
+		"echo '7.0.5'\n")
+	source := newFakeSource(t, root, []string{binDir}, nil)
+	services, err := source.Services(context.Background())
+	if err != nil {
+		t.Fatalf("探测服务失败: %v", err)
+	}
+	mongodb, ok := findService(services, "mongodb")
+	if !ok {
+		t.Fatal("服务清单缺少 mongodb")
+	}
+	if mongodb.ClientVersion != "2.2.0" {
+		t.Fatalf("mongodb client_version=%q，期望 2.2.0", mongodb.ClientVersion)
+	}
+	if mongodb.ServerVersion != "7.0.5" || mongodb.VersionSource != VersionSourceServer {
+		t.Fatalf("mongodb server_version=%q source=%q，期望 7.0.5/server", mongodb.ServerVersion, mongodb.VersionSource)
+	}
+	if mongodb.VersionHint != "" {
+		t.Fatalf("探到服务端版本后不应有 version_hint: %q", mongodb.VersionHint)
+	}
+	argv := readArgv(t, argvFile)
+	assertArgvContains(t, argv, "--quiet", "--host", "127.0.0.1", "--port", "27017", "--eval", "db.version()")
+}
+
+// TestServerVersionRabbitMQ 覆盖 rabbitmqctl version 分支；客户端 --version 失败只丢
+// client_version，服务端版本仍可通过 rabbitmqctl 读到。
+func TestServerVersionRabbitMQ(t *testing.T) {
+	root := t.TempDir()
+	binDir := filepath.Join(root, "fakebin")
+	argvFile := filepath.Join(root, "rabbitmqctl-argv.txt")
+	t.Setenv("ARGV_FILE", argvFile)
+	writeFakeScript(t, filepath.Join(binDir, "rabbitmqctl"), "#!/bin/sh\n"+
+		"if [ \"$1\" = \"--version\" ]; then echo 'unknown command --version' >&2; exit 64; fi\n"+
+		": > \"$ARGV_FILE\"; for a in \"$@\"; do printf '%s\\n' \"$a\" >> \"$ARGV_FILE\"; done\n"+
+		"echo '3.13.7'\n")
+	source := newFakeSource(t, root, []string{binDir}, nil)
+	services, err := source.Services(context.Background())
+	if err != nil {
+		t.Fatalf("探测服务失败: %v", err)
+	}
+	rabbitmq, ok := findService(services, "rabbitmq")
+	if !ok {
+		t.Fatal("服务清单缺少 rabbitmq")
+	}
+	if rabbitmq.ServerVersion != "3.13.7" || rabbitmq.VersionSource != VersionSourceServer {
+		t.Fatalf("rabbitmq server_version=%q source=%q，期望 3.13.7/server", rabbitmq.ServerVersion, rabbitmq.VersionSource)
+	}
+	argv := readArgv(t, argvFile)
+	assertArgvContains(t, argv, "version")
+}

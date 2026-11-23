@@ -2,6 +2,8 @@
 
 kore 的本机服务发现插件（production）：**自动探测本机装了哪些运维服务、在哪、能不能用**，
 让用户不用手填环境细节。纯只读：不装包、不改配置、不启停服务。
+0.3.0 起补：方法级能力声明（§3.5 #12）、服务端探测凭据的显式声明与缺失提示（§3.5 #8 前置）、
+memcached / MongoDB / RabbitMQ / Elasticsearch 四类新指纹（端口 + 协议握手/版本串，无第三方依赖）。
 
 ## 协议方法（kore.plugin.v1）
 
@@ -13,6 +15,7 @@ kore 的本机服务发现插件（production）：**自动探测本机装了哪
 | `discover.services` | `{}` 或 `{"refresh":true}` | 服务数组，每项见下 |
 | `discover.ports` | `{}` 或 `{"refresh":true}` | 监听端口数组 |
 | `discover.summary` | `{}` 或 `{"refresh":true}` | `{ready,web_server,db,conclusion,suggestions[]}` |
+| `discover.config.get` | `{}` | `{plugin,persisted,credential_requirements[],transport,hint}`：服务端探测所需凭据的**声明与注入状态**（不回传凭据值） |
 
 ### discover.services
 
@@ -37,6 +40,10 @@ systemd unit 命中、仅通过运行中进程名识别（例如容器里的 ngi
 - `version_source ∈ server|client|unknown`：`server` = 服务端探测成功（信 `server_version`）；
   `client` = 只有客户端/二进制版本（`server_version` 为空，前端应显示"未连上服务端"）；
   `unknown` = 两端都没有。
+- `version_hint`（0.3.0 新增，仅在 found=true 且服务端版本没拿到时出现）：可操作提示——
+  缺哪个凭据环境变量、去哪填、或服务端为何不可达（未启动 / 认证失败 / 非默认端口）。
+  例：`未配置 MYSQL_PWD（可选）：服务端探测可能因认证失败而降级（当前 version_source=client）；
+  若该实例无需密码可忽略；需要时 在 db-mysql 插件的配置面板填入 root 密码…或等待内核凭据注入（§3.5 #8）`。
 - 服务端探测（每个目标独立，失败即降级，不报错）：
 
   | 目标 | 命令 | 凭据来源 |
@@ -45,6 +52,10 @@ systemd unit 命中、仅通过运行中进程名识别（例如容器里的 ngi
   | PostgreSQL | `psql -h 127.0.0.1 -p 5432 -U postgres -tAc "SHOW server_version"` + `PGCONNECT_TIMEOUT=3` | `PGPASSWORD` |
   | Redis | `redis-cli -h 127.0.0.1 -p 6379 --no-auth-warning INFO server`（取 `redis_version`） | `REDISCLI_AUTH` |
   | nginx | 宿主有二进制时 `nginx -v` 即服务端版本；只有容器进程时 `docker exec <容器> nginx -v` | — |
+  | Memcached | 原始 TCP 文本协议：连 `127.0.0.1:11211` 发 `version\r\n`，取 `VERSION <x.y.z>` | —（通常无认证） |
+  | Elasticsearch | 原始 TCP 最小 HTTP/1.0 `GET /`（`127.0.0.1:9200`），取响应 JSON 的 `version.number` | —（HTTP 端口通常无认证） |
+  | MongoDB | `mongosh --quiet --host 127.0.0.1 --port 27017 --eval "db.version()"`；旧版回退 `mongo` | 由 mongosh 自身认证配置决定（本插件不传密码） |
+  | RabbitMQ | `rabbitmqctl version`；回退 `rabbitmq-diagnostics -q server_version` | 依赖 erlang cookie 可读（通常只有 rabbitmq 用户可读，失败即降级） |
 
   MySQL/MariaDB 共用 3306，服务端类型按 `SELECT VERSION()` 归属：版本串含 `MariaDB`
   记到 `mariadb` 条目，不含记到 `mysql` 条目；另一个条目只保留 `client_version`
@@ -66,6 +77,10 @@ systemd unit 命中、仅通过运行中进程名识别（例如容器里的 ngi
 | 数据库 | mariadb | `mariadb`/`mariadbd` | `/usr/bin/mariadb` | `/etc/mysql/mariadb.conf.d` 等 | 3306 |
 | 数据库 | postgres | `psql`/`postgres`/`pg_ctl` | `/usr/bin/psql`、`/usr/lib/postgresql/*/bin/postgres` | `/etc/postgresql` | 5432 |
 | 缓存 | redis | `redis-server`/`redis-cli` | `/usr/bin/redis-server` | `/etc/redis` | 6379 |
+| 缓存 | memcached | `memcached` | `/usr/bin/memcached` | —（Debian 为 `/etc/memcached.conf` 单文件） | 11211 |
+| 数据库 | mongodb | `mongod`/`mongosh`/`mongo` | `/usr/bin/mongod`、`/usr/local/bin/mongosh` | `/etc/mongodb` | 27017 |
+| 消息队列 | rabbitmq | `rabbitmqctl`/`rabbitmq-server` | `/usr/sbin/rabbitmqctl` | `/etc/rabbitmq` | 5672 |
+| 搜索 | elasticsearch | `elasticsearch` | `/usr/share/elasticsearch/bin/elasticsearch` | `/etc/elasticsearch` | 9200 |
 | 运行时 | php | `php` | `/usr/bin/php` | `/etc/php` | — |
 | 运行时 | node | `node`/`nodejs` | `/usr/bin/node`、`/usr/local/bin/node` | — | — |
 | 运行时 | python3 | `python3` | `/usr/bin/python3` | — | — |
@@ -110,6 +125,66 @@ systemd unit 命中、仅通过运行中进程名识别（例如容器里的 ngi
 - 建议按 web → db → cache → container → runtime → cron → firewall 的固定顺序生成；
   空机器会给出"先装 nginx"的可执行提示。
 
+## 方法级能力（method_capabilities，§3.5 #12）
+
+`info.json` 声明 4 条方法级能力，全部只读（内核 `POST /api/v1/invoke` 命中即单独生效，
+未命中回退插件级 `capabilities`）：
+
+```json
+"capabilities": ["system:read", "proc:read"],
+"method_capabilities": {
+  "discover.services": "system:read",
+  "discover.ports": "system:read",
+  "discover.summary": "system:read",
+  "discover.config.get": "system:read"
+}
+```
+
+- 本插件所有业务方法都是只读探测，因此没有 `system:admin` 映射；审计侧也不会为这些方法写
+  `invoke.*` 记录（协议 §3.1.2.1 的只读口径）。
+- **没有 `config.set`**：本插件不接受明文凭据（见下节），因此不存在 `config.set` 的
+  `system:admin` 映射。`info.json` 与代码两侧都由 `declaration_test.go` 双向锁定（声明集合 ==
+  实现集合、键语法/插件域/能力白名单、`config.set` 不得出现）。
+- 插件级 `capabilities` 仍保留 `system:read` + `proc:read`（兜底 + `/proc/net` 读取语义），
+  方法级只在只读侧收窄，不是替代。
+
+## 服务端探测凭据（§3.5 #8 前置声明）
+
+discover 读 MySQL / PostgreSQL / Redis 的**服务端版本**需要密码，但凭据归
+`db-mysql` / `db-postgres` / `redis` 各自配置所有，插件之间不共享配置文件；内核凭据注入
+（[PLUGIN-CONFIG §6.1](../kore/docs/PLUGIN-CONFIG.md) 候选 A）尚未实现。本插件因此把需求
+**显式声明**出来（`discover.config.get`）：
+
+| id | 环境变量 | 适用服务 | 用途 |
+| --- | --- | --- | --- |
+| `mysql_password` | `MYSQL_PWD` | mysql / mariadb | 连 127.0.0.1:3306 执行 `SELECT VERSION()` |
+| `postgres_password` | `PGPASSWORD` | postgres | 连 127.0.0.1:5432 执行 `SHOW server_version` |
+| `redis_password` | `REDISCLI_AUTH` | redis | 连 127.0.0.1:6379 执行 `INFO server` |
+
+- `config.get` 只回**声明与状态**（`configured` / `missing`）+ `fill_hint`，**绝不回传凭据值**；
+  凭据只从进程环境变量读取，值不进 argv（`/proc/<pid>/cmdline` 对同机其他用户可见）、
+  不落盘、不进日志。
+- 凭据是**可选**的：缺失只让对应服务降级为 `version_source=client/unknown`，不影响插件可用性；
+  `services` 条目的 `version_hint` 会点名缺哪个变量、去哪填。
+- 内核凭据注入落地后只需把密码注入**同名环境变量**（`MYSQL_PWD` / `PGPASSWORD` /
+  `REDISCLI_AUTH`），本插件代码零改动；`transport` 字段已写明该契约。
+- **不提供 `config.set`**：让凭据经插件 API 明文写入等于把密码搬进插件内存/日志面，
+  与「凭据只存 0600 配置文件 + 内核机械注入」的方向相反。需要临时验证时，
+  在启动 kored 前 `export` 对应环境变量（重启即失效，运维手工手段，不是产品能力）。
+
+## 安装动作：判定不做
+
+`PLUGIN-MATURITY` §2 把「安装动作」列为 discover 的缺口。本插件**不实现安装动作**，理由：
+
+1. 安装软件包是**写操作且需要 root**：要么新增 root_actions（固定 argv 的包管理器调用），
+   要么依赖宿主提权通道；discover 的定位是「只读发现 + 给建议」，一旦能装包就变成
+   系统管理插件，与 `depth_level=production` 的只读契约冲突。
+2. 装什么、从哪个源装（发行版仓库 / 官方源 / 容器）属于**部署编排**，应由 `app-deploy`
+   或包管理器类插件负责；discover 只把「未安装 + Debian/RHEL 安装命令」通过 `install_hint`
+   给出，并指向对应插件（`site` / `db-mysql` / `redis` / `container` 等）。
+3. 若将来要做，必须先有 root 通道与审计（ADR-0018 的 `root_actions` + `root.action` 审计）
+   和失败回滚设计；不满足这些前提的「一键安装」是更危险的功能，而不是更全的功能。
+
 ## 只读与资源边界
 
 | 边界 | 实现 |
@@ -118,6 +193,7 @@ systemd unit 命中、仅通过运行中进程名识别（例如容器里的 ngi
 | 命令注入 | 全部 `exec.CommandContext(bin, args...)`，bin/args 来自常量表，不接收用户输入 |
 | 超时 | 单条命令 3s，整次方法调用 15s（`context.WithTimeout`） |
 | 缓存 | 30s 内存缓存 + mutex，调用时判断过期；无后台刷新、无 ticker（G-19） |
+| 网络 | 只连 `127.0.0.1` 的服务端口（MySQL/PG/Redis/Memcached/ES + docker socket 命令）；不扫网段、不访问外网 |
 | 平台隔离 | `/proc/net/*` 只在 `internal/probe/ports_linux.go`（`//go:build linux`），其它平台 stub |
 | 非 Linux | 三个方法统一返回 `E_UNSUPPORTED`，不静默降级成空清单 |
 | 数据形状 | 对外结构体全部显式字段，无 `any` / `object` / `map[string]any` |
@@ -141,7 +217,13 @@ go test ./tests/fault      # kill / timeout / disk / cgroup 四类故障注入
 - `/proc/net/tcp` fixture 十六进制换算（`0100007F:1F90` → `127.0.0.1:8080`）；
 - tcp6（`::` / `::1` / IPv4-mapped）解析；
 - summary 有 nginx → suggestions 含 `site`；
-- 缓存 30s、`refresh`、整体超时、非 Linux `E_UNSUPPORTED`。
+- 缓存 30s、`refresh`、整体超时、非 Linux `E_UNSUPPORTED`；
+- 0.3.0 新增：方法级能力一致性（声明 == 实现、键语法/域/白名单、无 config.set）、
+  `config.get` 三态（全缺 / 部分配置 / 不回传凭据值）、`version_hint` 三态
+  （缺凭据 / 已配置但不可达 / 探到服务端版本时不出现）、
+  memcached 文本握手与 Elasticsearch HTTP 指纹（本机临时监听端口模拟）、
+  MongoDB（`mongosh --eval`）与 RabbitMQ（`rabbitmqctl version`）固定 argv 分支、
+  新指纹未安装时 `install_hint` 齐全。
 
 ## 平台
 

@@ -150,6 +150,16 @@ func TestDispatchMethods(t *testing.T) {
 			t.Fatalf("%s 结果应为对象: %s", method, response.Result)
 		}
 	}
+	// 0.3.0 新增：凭据声明 + 注入状态的只读视图（裸名/全名都可调）。
+	for _, method := range []string{"discover.config.get", "config.get"} {
+		response := dispatchCall(t, method, nil)
+		if response.Error != nil {
+			t.Fatalf("%s 失败: %+v", method, response.Error)
+		}
+		if len(response.Result) == 0 || response.Result[0] != '{' {
+			t.Fatalf("%s 结果应为对象: %s", method, response.Result)
+		}
+	}
 }
 
 // dispatchCall 把方法调用打到 dispatch 并返回响应。

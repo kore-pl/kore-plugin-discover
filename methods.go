@@ -43,7 +43,7 @@ func dispatch(request *pluginapi.Request, cfg config, discovery *probe.Runtime, 
 func normalizeMethod(method, id string) (string, bool) {
 	verb := strings.TrimPrefix(method, id+".")
 	switch verb {
-	case "services", "ports", "summary":
+	case "services", "ports", "summary", "config.get":
 		return "discover." + verb, true
 	default:
 		return "", false
