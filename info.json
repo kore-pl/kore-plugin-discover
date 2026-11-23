@@ -1,7 +1,7 @@
 {
   "id": "discover",
   "name": "本机服务发现插件",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "protocol": "kore.plugin.v1",
   "lifecycle": "lazy",
   "depth_level": "production",
@@ -22,7 +22,7 @@
   "scenario_tags": [
     "ops"
   ],
-  "size_bytes": 1532091,
+  "size_bytes": 1533964,
   "method_capabilities": {
     "discover.services": "system:read",
     "discover.ports": "system:read",

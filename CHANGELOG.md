@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.1 (2026-11-23)
+
+- fix: **running 判定不再把容器内进程/容器转发端口当成宿主服务**——`/proc/<pid>/cgroup` 区分宿主进程与容器进程（docker / containerd / kubepods / libpod / crio），端口监听者若是 `docker-proxy` / `containerd-shim` 只算「容器转发」；两类都置 `running=false` 并新增 `running_hint` 说明「容器内运行、宿主默认端口未监听、请用 docker port 查发布端口」
+- fix: **只有客户端没有服务端**（`mariadb` 只有客户端二进制、无 `mariadbd` 宿主进程且端口由容器转发）不再报 `running=true`
+- fix: **mysql / mariadb 重复计数合并**——同一客户端二进制（`os.SameFile` 确证）只保留一条，另一条 `found=false` 并说明是同一 MariaDB 客户端
+- fix: **版本未知显式化**——`version_source=unknown` 时 `version_hint` 明确写「版本未知：客户端 --version 未返回可识别版本…」，不再留空字符串
+- test: 新增表驱动回归（容器内进程 running=false + 解释、docker-proxy 转发端口 running=false、宿主进程/宿主监听 running=true、容器 cgroup 端到端、版本未知文案）
+
 All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),

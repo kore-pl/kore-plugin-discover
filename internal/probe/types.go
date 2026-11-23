@@ -41,6 +41,9 @@ type Service struct {
 	VersionHint string `json:"version_hint,omitempty"`
 	ConfigDir   string `json:"config_dir,omitempty"`
 	Running     bool   `json:"running"`
+	// RunningHint 解释「为什么 running=false」里最容易误判的两种情况：
+	// 容器里跑着但宿主没监听、以及只装了客户端没有服务端进程。空串表示无异常。
+	RunningHint string `json:"running_hint,omitempty"`
 	Port        int    `json:"port"`
 	Source      string `json:"source,omitempty"`
 	InstallHint string `json:"install_hint,omitempty"`
