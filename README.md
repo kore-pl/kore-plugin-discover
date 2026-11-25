@@ -1,5 +1,7 @@
 # kore-plugin-discover
 
+语言：[简体中文](docs/DETAIL.md) · [English](docs/DETAIL.en.md) · [Español](docs/DETAIL.es.md) · [Français](docs/DETAIL.fr.md) · [Deutsch](docs/DETAIL.de.md) · [Русский](docs/DETAIL.ru.md) · [Português](docs/DETAIL.pt.md)
+
 kore 的本机服务发现插件（production）：**自动探测本机装了哪些运维服务、在哪、能不能用**，
 让用户不用手填环境细节。纯只读：不装包、不改配置、不启停服务。
 0.3.0 起补：方法级能力声明（§3.5 #12）、服务端探测凭据的显式声明与缺失提示（§3.5 #8 前置）、
@@ -249,3 +251,7 @@ Linux 为唯一真实实现（v1.0 GA 口径）。macOS / Windows 返回 `E_UNSU
 - **相关仓库**：[索引 kore-plugins](https://github.com/kore-pl/kore-plugins) · [协议文档](https://github.com/kore-pl/kore/blob/main/docs/PLUGIN-PROTOCOL.md) · [SDK 指南](https://github.com/kore-pl/kore/blob/main/docs/PLUGIN-SDK.md)
 
 <!-- oss:end -->
+
+## 支持本项目
+
+如果这个插件帮你省下了手工排查服务环境的功夫，欢迎去 [GitHub 仓库](https://github.com/kore-pl/kore-plugin-discover) 点个 star ⭐——你的支持就是我继续更新的动力。

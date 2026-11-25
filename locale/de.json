@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Plugin zur Erkennung lokaler Dienste",
+    "description": "Erkennt automatisch, welche Betriebsdienste auf dem Host installiert sind, wo sie sich befinden und ob sie funktionieren. Rein lesend: keine Paketinstallation, keine Konfigurationsänderung, kein Starten oder Stoppen von Diensten. Die Serverversionsprüfung deklariert nur Anforderungen an Zugangsdaten und deren Status, gibt aber niemals die Werte zurück.",
+    "detail": "docs/DETAIL.de.md"
+  }
+}

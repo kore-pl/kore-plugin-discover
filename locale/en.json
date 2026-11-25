@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Local Service Discovery Plugin",
+    "description": "Automatically detects which operations services are installed on the host, where they are, and whether they work. Read-only: no package installation, no config changes, no service start/stop. Server version probes only declare credential requirements and status, never returning credential values.",
+    "detail": "docs/DETAIL.en.md"
+  }
+}

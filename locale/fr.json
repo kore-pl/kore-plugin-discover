@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Plugin de découverte des services locaux",
+    "description": "Détecte automatiquement les services d'exploitation installés sur l'hôte, leur emplacement et leur disponibilité. Lecture seule : aucune installation de paquet, aucune modification de configuration, aucun démarrage ou arrêt de service. Les sondes de version du serveur ne déclarent que les besoins d'identifiants et leur état, sans jamais renvoyer les valeurs.",
+    "detail": "docs/DETAIL.fr.md"
+  }
+}

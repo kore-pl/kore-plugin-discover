@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Plugin de descubrimiento de servicios locales",
+    "description": "Detecta automáticamente qué servicios de operaciones están instalados en el host, dónde están y si funcionan. Solo lectura: no instala paquetes, no cambia configuraciones ni inicia o detiene servicios. Las sondas de versión del servidor solo declaran requisitos de credenciales y su estado, sin devolver nunca los valores.",
+    "detail": "docs/DETAIL.es.md"
+  }
+}

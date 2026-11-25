@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.2 — 2026-11-25
+
+### 新增
+
+- 补齐简体中文、English、Español、Français、Deutsch、Русский、Português 七种语言的使用说明（`docs/DETAIL*.md`）与插件元数据（`locale/*.json`），README 顶部新增语言切换行。
+- 补齐 dependabot、CODEOWNERS 与 SECURITY 英文译文，新增本地化分支模型与 SSH 签名约定。
+
+### 变更
+
+- 发起带 SSH 签名的 `v0.3.2` 版本 tag，仅标注版本，不改动历史 tag、不推送分支或 tag。
+
 ## 0.3.1 (2026-11-23)
 
 - fix: **running 判定不再把容器内进程/容器转发端口当成宿主服务**——`/proc/<pid>/cgroup` 区分宿主进程与容器进程（docker / containerd / kubepods / libpod / crio），端口监听者若是 `docker-proxy` / `containerd-shim` 只算「容器转发」；两类都置 `running=false` 并新增 `running_hint` 说明「容器内运行、宿主默认端口未监听、请用 docker port 查发布端口」
